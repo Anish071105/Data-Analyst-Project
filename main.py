@@ -6,6 +6,7 @@ import uuid
 import shutil
 import json
 import re
+from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai  # Make sure installed
 import asyncio
 from pathlib import Path
@@ -618,6 +619,13 @@ Produce the final output now.
     return parsed_final
 
 ### FastAPI endpoint #########################################################
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],                # change to your frontend origin(s) in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/api/")
 async def handle_files(request: Request):
@@ -627,10 +635,14 @@ async def handle_files(request: Request):
 
     valid_names = {"question.txt", "questions.txt", "question", "questions"}
 
+    # Parse multipart/form-data form
     form = await request.form()
     for field_name, value in form.multi_items():
+        # file field
         if hasattr(value, "filename") and hasattr(value, "read"):
-            file_path = os.path.join(session_dir, value.filename)
+            # sanitize filename if you want (this is basic)
+            filename = os.path.basename(value.filename)
+            file_path = os.path.join(session_dir, filename)
             with open(file_path, "wb") as f:
                 f.write(await value.read())
             uploaded_files.append(file_path)
@@ -646,19 +658,18 @@ async def handle_files(request: Request):
     print(f"Session directory: {session_dir}")
     print(f"Question file path: {question_file_path}")
     print(f"Uploaded files initially: {uploaded_files}")
-    
+
     if not question_file_path:
         print("No question file found.")
         return {"error": "No question file found"}
 
-    # 1) Extract structured metadata (url/questions/response_format/etc) from questions file
+    # 1) Extract metadata from questions file
     extracted = extract_from_questions(question_file_path)
     print("Extracted metadata from questions file:")
     print(json.dumps(extracted, indent=2))
 
     # 2) If URL present, run extraction flow (scrape & get relevant table/image)
     if extracted.get("url"):
-        # This will append files like tgak.csv or tgak.png or tgak.md to uploaded_files
         await extract_impinfo_from_source(
             session_dir,
             extracted["url"],
@@ -687,20 +698,21 @@ async def handle_files(request: Request):
     print("Final formatted answers to return:")
     print(json.dumps(final_answers, indent=2, ensure_ascii=False))
 
-    # Optional: Cleanup session directory after processing
-    # shutil.rmtree(session_dir, ignore_errors=True)
+    # Optional: cleanup session dir after processing
+    shutil.rmtree(session_dir, ignore_errors=True)
 
     return final_answers
 
-@app.get("/")
-@app.post("/")
-@app.head("/")
-async def root():
-    return {"message":"APPI is running","endpoints":["/api/","/health"]}
 
-@app.head("/health")
+# simple root that accepts GET and HEAD (no POST)
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root(request: Request):
+    # For HEAD requests, FastAPI will return an empty body automatically.
+    return {"message": "TDS Virtual TA API is running", "endpoints": ["/api/", "/health"]}
+
+
+# health endpoint supports GET and HEAD
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
-    return {
-        "status":"ok",
-    }
-
+    # Return a small JSON for GET; FastAPI will auto-handle HEAD
+    return {"status": "ok"}
