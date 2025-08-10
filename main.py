@@ -692,6 +692,13 @@ async def handle_files(request: Request):
 
     return final_answers
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/")
+async def root():
+    return {"message":"TDS Virtual TA API is running","endpoints":["/api/","/health"]}
+
+@app.get("/health")
+async def health():
+    return {
+        "status":"ok",
+    }
+
