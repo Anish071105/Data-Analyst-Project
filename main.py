@@ -693,10 +693,12 @@ async def handle_files(request: Request):
     return final_answers
 
 @app.get("/")
+@app.post("/")
+@app.head("/")
 async def root():
-    return {"message":"TDS Virtual TA API is running","endpoints":["/api/","/health"]}
+    return {"message":"APPI is running","endpoints":["/api/","/health"]}
 
-@app.get("/health")
+@app.head("/health")
 async def health():
     return {
         "status":"ok",
